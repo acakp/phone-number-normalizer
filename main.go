@@ -1,15 +1,34 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5"
 )
 
+type Dbcreds struct {
+	Host     string `json:"host"`
+	Port     string `json:"port"`
+	User     string `json:"user"`
+	DbName   string `json:"dbname"`
+	Password string `json:"password"`
+}
+
 func main() {
-	test1 := "ab12 3333 ddddd ddd"
-	test2 := "+7 (904) 675 60-79"
-	fmt.Println(normalize(test1))
-	fmt.Println(normalize(test2))
+	dbcreds := readDbcreds("dbcreds.json")
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbcreds.Host, dbcreds.Port, dbcreds.User, dbcreds.Password, dbcreds.DbName)
+
+	conn, err := pgx.Connect(context.Background(), dsn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer conn.Close(context.Background())
 }
 
 func normalize(phone string) string {
@@ -21,4 +40,18 @@ func normalize(phone string) string {
 		}
 	}
 	return ret
+}
+
+func readDbcreds(fileName string) Dbcreds {
+	configFile, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Printf("Error reading %v:\n", fileName)
+		panic(err)
+	}
+	var dbcreds Dbcreds
+	if err := json.Unmarshal(configFile, &dbcreds); err != nil {
+		fmt.Printf("Error unmarshaling %v:\n", fileName)
+		panic(err)
+	}
+	return dbcreds
 }
